@@ -23,3 +23,7 @@ Imports:
     tictoc
 URL: https://github.com/bmannakee/batcaver
 BugReports: https://github.com/bmannakee/batcaver/issues
+Suggests: 
+    testthat
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 6.1.1
