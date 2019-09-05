@@ -21,3 +21,5 @@ Imports:
     deconstructSigs,
     ggplot2,
     tictoc
+URL: https://github.com/bmannakee/batcaver
+BugReports: https://github.com/bmannakee/batcaver/issues
