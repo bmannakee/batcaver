@@ -15,7 +15,7 @@
 #'
 #'
 #' }
-load_variants <- function(vcf,file_type="vcf",reference,sample_name,){
+load_variants <- function(vcf,file_type="vcf",reference,sample_name){
 
   if (! file.exists(vcf)){
     stop('Variant file does not exist - Please check the path')
