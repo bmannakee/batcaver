@@ -9,7 +9,7 @@ run_batcave <- function(vcf, reference, file_type = "vcf", seq_type="wgs",
   }
 
   tictoc::tic("Run time")
-  vars <- load_variants(vcf,reference,sample_name, file_type)
+  vars <- load_variants(vcf = vcf, reference = reference, sample_name = sample_name, file_type = file_type)
   print("computing priors")  # compute per-site mutation probability
   # compute mu
   if (seq_type=="wes"){ N <- 3e7}
