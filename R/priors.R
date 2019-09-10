@@ -1,10 +1,10 @@
 # internal functions to compute the tumor and site specific prior probability of mutation
 
 # base function to compute all parts of the prior P(m,M|C)
-.compute_priors <- function(vr,reference,mu,prior_lod,profile_path=NULL,plot_path=NULL){
+.compute_priors <- function(vr,reference,mu,min_odds,profile_path=NULL,plot_path=NULL){
   # Obtain the set of variants that have MuTect-computed odds greater than the specified threshold
   # and pass all filters.
-  prior_vars <- vr %>% dplyr::filter((mutect_odds >= prior_lod) & pass_all)
+  prior_vars <- vr %>% dplyr::filter((mutect_odds >= min_odds) & pass_all)
 
   mutation_prior = .compute_empirical_prior(prior_vars, reference,profile_path)
 
@@ -57,7 +57,7 @@
   } else {
     ds_input <- deconstructSigs::mut.to.sigs.input(as.data.frame(fr),bsg = reference)
   }
-
+  tictoc::toc()
   rm(fr) # Clean up memory
   gc()
   ds_input <- ds_input %>% t() %>% as_tibble(rownames = "ctxt")
