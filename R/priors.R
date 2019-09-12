@@ -6,7 +6,7 @@
   # and pass all filters.
   prior_vars <- vr %>% dplyr::filter((mutect_odds >= min_odds) & pass_all)
 
-  mutation_prior = .compute_empirical_prior(prior_vars, reference,profile_path)
+  mutation_prior = .compute_empirical_prior(prior_vars = prior_vars, reference = reference, profile_path = profile_path, plot_path = plot_path)
 
   context_prior <- .compute_context_prior(prior_vars) #P(C | M) This can be zero, so need to normalize, this is where the dirichlet will come in.
   rm(prior_vars)
