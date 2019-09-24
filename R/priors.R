@@ -41,7 +41,7 @@
   rm(vr2)
   gc()
   vr4 <- vr3 %>% dplyr::mutate(prior_odds=10**(TLOD + logit_prior))
-  vr4
+  vr4 <- vr4 %>% dplyr::mutate(pprob_variant = prior_odds/(1 + prior_odds))
 
 }
 

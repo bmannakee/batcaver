@@ -20,7 +20,9 @@ Imports:
     magrittr,
     deconstructSigs,
     ggplot2,
-    tictoc
+    tictoc,
+    crayon,
+    glue
 URL: https://github.com/bmannakee/batcaver
 BugReports: https://github.com/bmannakee/batcaver/issues
 Suggests: 
