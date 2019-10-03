@@ -57,7 +57,7 @@
   } else {
     ds_input <- deconstructSigs::mut.to.sigs.input(as.data.frame(fr),bsg = reference)
   }
-  tictoc::toc()
+
   rm(fr) # Clean up memory
   gc()
   ds_input <- ds_input %>% t() %>% as_tibble(rownames = "ctxt")
