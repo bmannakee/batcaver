@@ -10,8 +10,8 @@ The dependencies can be installed prior to installation of **batcaver** using th
 ```
 ### Not run
 ## install dependencies
-depencies <- c("dplyr","tidyr","readr","magrittr","deconstructSigs","ggplot2","tictoc","crayon","glue","devtools")
-install.packages(dependcies)
+dependencies <- c("dplyr","tidyr","readr","magrittr","deconstructSigs","ggplot2","tictoc","crayon","glue","devtools")
+install.packages(dependencies)
 source("https://bioconductor.org/biocLite.R")
 biocLite(c("Rsamtools","SomaticSignatures","GenomicAlignments","VariantAnnotation"))
 
