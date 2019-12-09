@@ -2,6 +2,23 @@ library(tidyverse)
 library(SomaticSignatures)
 library(usethis)
 library(BSgenome.Hsapiens.UCSC.hg38)
+
+
+get_signature <- function(...){
+  dots <- list(...)
+  dots
+  fr <- suppressMessages(read_tsv('./signatures_probabilities.txt') %>% dplyr::select(-contains("X")))
+
+  names(fr) %<>% stringr::str_replace_all("\\s","_") %>% tolower
+  props <- fr %>% dplyr::select(paste0("signature_",dots)) %>%
+    dplyr::mutate_(row_total = ~Reduce(`+`,.)) %>%
+    dplyr::mutate(row_prop = row_total/sum(row_total)) %>% pull(row_prop)
+  out <- tibble(context = fr$somatic_mutation_type,prop = props)
+  out
+}
+
+
+
 # use Somatic signatures to create a table that has the fraction of the whole genome for each of the 32 possible contexts
 seqs <- SomaticSignatures::kmerFrequency(BSgenome.Hsapiens.UCSC.hg38,n=1e7,k=3)
 fr <- data.frame(ctxt=as.character(names(seqs)),global_prior=as.numeric(seqs))
@@ -18,3 +35,11 @@ renamed_fr <- no_n_fr %>% mutate(cref=case_when(cref == "G" ~ "C",cref == "A" ~ 
 global_prior_fr <- renamed_fr %>% dplyr::group_by(context,cref) %>% summarize(global_prior = sum(global_prior))
 
 usethis::use_data(global_prior_fr, internal = TRUE)
+
+sig_probs <- all_96_categories <- get_signature(1) %>% pull(context)
+
+usethis::use_data(all_contexts, internal = TRUE)
+
+
+
+

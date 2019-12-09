@@ -9,7 +9,7 @@
 #' @param min_vaf The minimum allele frequency to use to compute mutation rate per base (default = "0.05)
 #' @param min_odds The odds ratio cutoff for high-confidence mutations used to compute prior probability of mutation (default = "10" which corresponds to MuTect TLOD = 7.3)
 #' @param plot_path The file name to use for a plot of the empirical mutation profile (default = "NULL" for no plot)
-#' @param profile_path The file name to use for a tab separated file containing the empirical mutation profile (default = "NULL" for no file)
+#' @param profile_path The file name to use for a tab separated file containing the empirical mutation profile after the addition of every mutation (default = "NULL" for no file)
 #' @return a data frame with 11 columns: \code{chrom} the chromosome the variant is on,
 #'  \code{start} and \code{end} the position of the variant, \code{ref} and \code{alt} the reference and alternate alleles,
 #'  \code{context} the tri-nucleotide context of the variant, \code{TLOD} the score reported by MuTect, \code{freq} the variant allele frequency,
@@ -38,6 +38,8 @@
 
 run_batcave <- function(vcf, reference, file_type = "vcf", seq_type="wgs",
                         sample_name='TUMOR', min_vaf = 0.05, min_odds = 10.0,
+                        contamination_fraction = "0.0",
+                        high_conf_variant_path = "./high_condidence_variants.tsv",
                         plot_path = NULL, profile_path = NULL){
   if (!file.exists(vcf)){
     stop('The VCF path is not valid.')
@@ -60,5 +62,6 @@ run_batcave <- function(vcf, reference, file_type = "vcf", seq_type="wgs",
 
   tictoc::toc()
   vars <- vars %>% dplyr::select("chrom" = "seqnames", start, end, ref, alt, context, TLOD, freq, pass_all, tlod_only, pprob_variant)
+  vars <- vars %>% dplyr::mutate(adjusted_freq = freq/(1.0 - contamination_fraction))
   vars
 }
