@@ -126,3 +126,69 @@
   ggsave(filename = file_path, plot = p, height = 4, width = 7.5, units = "in")
 }
 
+gather_context_prior_by_site <- function(fr){
+  # input data frame (fr) is the output from smartcallr
+  # Create the data frame needed to compute the KL divergence
+  # between prior and target as each mutation is added in
+  # descending order of allele frequency
+  # This function is using the development version of tidyr to
+  # get the pivot_wider and pivot_longer functions which make this much much easier
+  # The end result is the signature prior at every new mutation evaluated, order by descinding vaf
+
+  # Get the 96 mutation categories
+  all_96_categories <- get_signature(1) %>% pull(context)
+
+  # Get only the mutations we want
+  ppt <- fr %>% dplyr::filter(pass_all) %>% # only variants that pass
+    tidyr::separate(context, into=c("left","right")) %>% # make substitution_type that matches COSMIC key A.T -> left=A,right=T
+    dplyr::mutate(mutation_type = paste0(left,"[",cref,">",calt,"]",right)) %>% # A[C>A]T
+    dplyr::select(seqnames,start,mutation_type,TLOD) %>%
+    dplyr::mutate(mutation_type = factor(mutation_type, levels = all_96_categories)) %>%
+    unique() %>% # Try making this a factor before spreading to see if we get all 96 columns.
+    dplyr::arrange(desc(TLOD))
+
+
+
+
+
+  # now spread it into a one-hot matrix
+  ppt <- ppt %>% mutate(seen = 1) %>%
+    tidyr::pivot_wider(names_from = mutation_type,
+                       values_from = seen,
+                       values_fill = list(seen=0))
+
+  # The tumor might not have a mutation in each of the 96 contexts, but we need them all.
+  these_names <- colnames(ppt %>% dplyr::select(contains(">")))
+  missing <- setdiff(all_96_categories,these_names)
+  ppt[missing] <- 0
+
+  # now get the cumulative sum as each mutation_type appears
+  ppt <- ppt %>% dplyr::mutate_at(.funs = funs("cum" = cumsum(.) + 1),
+                                  .vars = vars(contains(">"))) %>% # adds a new column with "_cum" that is the cumsum +1 for each. This is now the dirichlet prior!
+    dplyr::select(seqnames,start,TLOD,contains("_cum")) %>% # get rid of the non-cumsum cols
+    purrr::set_names(~str_replace_all(.,"_cum",""))# rename the columns so they are normal again
+
+  # Now make the dirichlet prior into expected value of the probability vector for the multinomial.
+  ppt <- ppt %>% dplyr::mutate_(row_total = ~Reduce(`+`, .[4:ncol(.)])) %>%
+    mutate_at(.funs = funs(prop = ./row_total),
+              .vars = vars(contains(">"))) %>%
+    dplyr::select(seqnames,start,TLOD,contains("_")) %>%
+    purrr::set_names(~str_replace_all(.,"_prop","")) %>%
+    dplyr::select(-row_total)
+
+  # Here you go!
+  ppt
+}
+
+get_signature <- function(...){
+  dots <- list(...)
+  dots
+  fr <- suppressMessages(read_tsv('./data/signatures_probabilities.txt') %>% dplyr::select(-contains("X")))
+
+  names(fr) %<>% stringr::str_replace_all("\\s","_") %>% tolower
+  props <- fr %>% dplyr::select(paste0("signature_",dots)) %>%
+    dplyr::mutate_(row_total = ~Reduce(`+`,.)) %>%
+    dplyr::mutate(row_prop = row_total/sum(row_total)) %>% pull(row_prop)
+  out <- tibble(context = fr$somatic_mutation_type,prop = props)
+  out
+}

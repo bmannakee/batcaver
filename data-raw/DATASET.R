@@ -34,11 +34,11 @@ renamed_fr <- no_n_fr %>% mutate(cref=case_when(cref == "G" ~ "C",cref == "A" ~ 
 # sums to 95% with something like 5% of the genome bases being N
 global_prior_fr <- renamed_fr %>% dplyr::group_by(context,cref) %>% summarize(global_prior = sum(global_prior))
 
-usethis::use_data(global_prior_fr, internal = TRUE)
+#usethis::use_data(global_prior_fr, internal = TRUE)
 
-sig_probs <- all_96_categories <- get_signature(1) %>% pull(context)
+all_contexts <- all_96_categories <- get_signature(1) %>% pull(context)
 
-usethis::use_data(all_contexts, internal = TRUE)
+usethis::use_data(global_prior_fr,all_contexts, internal = TRUE)
 
 
 
