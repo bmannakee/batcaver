@@ -58,10 +58,14 @@ run_batcave <- function(vcf, reference, file_type = "vcf", seq_type="wgs",
   message(crayon::green(glue::glue("Estimated mutation rate: ",mu)))
 
   vars <- .compute_priors(vars,reference = reference,mu = mu,min_odds = min_odds,
-                          plot_path = plot_path,  profile_path = profile_path)
+                          plot_path = plot_path)
 
   tictoc::toc()
   vars <- vars %>% dplyr::select("chrom" = "seqnames", start, end, ref, alt, context, TLOD, freq, pass_all, tlod_only, pprob_variant)
   vars <- vars %>% dplyr::mutate(adjusted_freq = freq/(1.0 - contamination_fraction))
+  if (!is.null(profile_path)){
+    gather_context_prior_by_site(vars) %>% readr::write_tsv(profile_path)
+  }
+
   vars
 }
