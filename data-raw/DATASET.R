@@ -7,7 +7,7 @@ library(BSgenome.Hsapiens.UCSC.hg38)
 get_signature <- function(...){
   dots <- list(...)
   dots
-  fr <- suppressMessages(read_tsv('./signatures_probabilities.txt') %>% dplyr::select(-contains("X")))
+  fr <- suppressMessages(read_tsv('./data-raw/signatures_probabilities.txt') %>% dplyr::select(-contains("X")))
 
   names(fr) %<>% stringr::str_replace_all("\\s","_") %>% tolower
   props <- fr %>% dplyr::select(paste0("signature_",dots)) %>%
@@ -38,7 +38,7 @@ global_prior_fr <- renamed_fr %>% dplyr::group_by(context,cref) %>% summarize(gl
 
 all_contexts <- all_96_categories <- get_signature(1) %>% pull(context)
 
-usethis::use_data(global_prior_fr,all_contexts, internal = TRUE)
+usethis::use_data(global_prior_fr,all_contexts, internal = TRUE, overwrite=T)
 
 
 
