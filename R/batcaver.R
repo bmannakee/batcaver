@@ -10,7 +10,7 @@
 #' @param min_vaf The minimum allele frequency to use to compute mutation rate per base (default = "0.05)
 #' @param min_odds The odds ratio cutoff for high-confidence mutations used to compute prior probability of mutation (default = "10" which corresponds to MuTect TLOD = 7.3)
 #' @param plot_path The file name to use for a plot of the empirical mutation profile (default = "NULL" for no plot)
-#' @param profile_path The file name to use for a tab separated file containing the empirical mutation profile after the addition of every mutation (default = "NULL" for no file)
+#' @param profile_path The file name to use for a tab separated file containing the empirical mutation profile (default = "NULL" for no file)
 #' @return a data frame with 11 columns: \code{chrom} the chromosome the variant is on,
 #'  \code{start} and \code{end} the position of the variant, \code{ref} and \code{alt} the reference and alternate alleles,
 #'  \code{context} the tri-nucleotide context of the variant, \code{TLOD} the score reported by MuTect, \code{freq} the variant allele frequency,
@@ -58,19 +58,21 @@ run_batcave <- function(vcf, reference, file_type = "vcf", seq_type="wgs",
 
   # compute per-site mutation probability
   # compute mu
-  if (seq_type=="wes"){ N <- 3e7}
-  else {N <- 3e9}
-  if (is.null(mu)) {
-    Nalpha <- vars %>% dplyr::filter(pass_all & ((adjusted_af >= alpha) & (adjusted_af <= 0.25))) %>% nrow()
-    mu <- Nalpha/((1/alpha - 1/.25)*N)
-  }
+  if (seq_type=="wes")
+    { N <- 3e7}
+  else
+  {N <- 3e9}
+
+  Nalpha <- vars %>% dplyr::filter(pass_all & ((adjusted_af >= alpha) & (adjusted_af <= 0.25))) %>% nrow()
+  mu <- Nalpha/((1/alpha - 1/.25)*N)
+
   message(crayon::green(glue::glue("Estimated mutation rate: ",mu)))
 
-  vars <- .compute_priors(vars,reference = reference,mu = mu,min_odds = min_odds,
+  vars <- .compute_priors(vars,reference = reference, mu = mu, min_odds = min_odds,
                           plot_path = plot_path)
 
   tictoc::toc()
-  vars <- vars %>% dplyr::select("chrom" = "seqnames", start, end, ref, alt, context, TLOD, freq, pass_all, tlod_only, pprob_variant)
+  vars <- vars %>% dplyr::select("chrom" = "seqnames", start, end, ref, alt, context, TLOD, freq, adjusted_af, pass_all, tlod_only, pprob_variant)
 
   if (!is.null(profile_path)){
     gather_context_prior_by_site(vars) %>% readr::write_tsv(profile_path)

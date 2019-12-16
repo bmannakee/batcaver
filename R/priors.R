@@ -5,10 +5,17 @@
   # Obtain the set of variants that have MuTect-computed odds greater than the specified threshold
   # and pass all filters.
   prior_vars <- vr %>% dplyr::filter((mutect_odds >= min_odds) & pass_all)
+
+  # Obtain the set of variants that pass mutect filters, but are below the threshold used to create the prior
+  # These will be tested to ensure the low frequency mutations
+  # are not far from the spectrum of the higher frequency mutations
+  comparison_vars <- vr %>% dplyr::filter((mutect_odds <= min_odds) & pass_all)
+
   prior_vars %>% write_tsv(high_confidence_variant_path)
   message(crayon::green(glue::glue("There are : ",length(prior_vars)," high confidence variants")))
   message(crayon::green(glue::glue("High confidence variant minimum allele frequency is : ",min(prior_vars$freq))))
   mutation_prior = .compute_empirical_prior(prior_vars = prior_vars, reference = reference, profile_path = profile_path, plot_path = plot_path)
+  comparison_prior = .compute_empirical_prior(prior_vars = comparison_vars, reference = reference, profile_path = NULL, plot_path = NULL)
 
   context_prior <- .compute_context_prior(prior_vars) #P(C | M) This can be zero, so need to normalize, this is where the dirichlet will come in.
   rm(prior_vars)
@@ -191,4 +198,8 @@ get_signature <- function(...){
     dplyr::mutate(row_prop = row_total/sum(row_total)) %>% pull(row_prop)
   out <- tibble(context = fr$somatic_mutation_type,prop = props)
   out
+}
+
+test_priors <- function(spectrum1, spectrum2){
+
 }
