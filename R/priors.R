@@ -7,7 +7,7 @@
   prior_vars <- vr %>% dplyr::filter((mutect_odds >= min_odds) & pass_all)
   prior_vars %>% write_tsv(high_confidence_variant_path)
   message(crayon::green(glue::glue("There are : ",length(prior_vars)," high confidence variants")))
-  message(crayon::green(glue::glue("High confidence variant minimum allele frequency is : ",max(prior_vars$freq))))
+  message(crayon::green(glue::glue("High confidence variant minimum allele frequency is : ",min(prior_vars$freq))))
   mutation_prior = .compute_empirical_prior(prior_vars = prior_vars, reference = reference, profile_path = profile_path, plot_path = plot_path)
 
   context_prior <- .compute_context_prior(prior_vars) #P(C | M) This can be zero, so need to normalize, this is where the dirichlet will come in.

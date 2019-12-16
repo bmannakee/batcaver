@@ -6,6 +6,7 @@
 #' @param file_type The file type of "vcf" (default = "vcf")
 #' @param seq_type The type of sequencing experiment. Whole Genome "wgs" or Whole Exome "wes" (default = "wgs")
 #' @param sample_name The name of the tumor sample (default = "TUMOR")
+#' @param tumor_fraction Tumor purity. Fraction of sample derived from the tumor (default = 1.0). Used to adjust allele frequencies
 #' @param min_vaf The minimum allele frequency to use to compute mutation rate per base (default = "0.05)
 #' @param min_odds The odds ratio cutoff for high-confidence mutations used to compute prior probability of mutation (default = "10" which corresponds to MuTect TLOD = 7.3)
 #' @param plot_path The file name to use for a plot of the empirical mutation profile (default = "NULL" for no plot)
@@ -26,18 +27,21 @@
 #'  file_type <- "vcf"
 #'  seq_type <- "wes"
 #'  sample_name <- "TUMOR"
+#'  tumor_fraction <- 1.0
 #'  min_vaf <- .1
 #'  min_odds <- 10
 #'  plot_path <- /path/to/empirical/profile/plot.pdf
 #'  profile_path <- /path/to/empirical/profile/profile.tsv
 #'  fr <- run_batcave(vcf = vcf, reference = reference, file_type = file_type,
-#'                    seq_type = seq_type, sample_name = sample_name, min_vaf = min_vaf,
-#'                    min_odds = min_odds, plot_path = plot_path, profile_path = profile_path)
+#'                    seq_type = seq_type, sample_name = sample_name,
+#'                    tumor_fraction = tumor_fraction, min_vaf = min_vaf, min_odds = min_odds,
+#'                    plot_path = plot_path, profile_path = profile_path)
 #'  }
 
 
 run_batcave <- function(vcf, reference, file_type = "vcf", seq_type="wgs",
-                        sample_name='TUMOR', min_vaf = 0.05, min_odds = 10.0,
+                        sample_name='TUMOR', tumor_fraction = 1.0,
+                        min_vaf = 0.05, min_odds = 10.0,
                         contamination_fraction = "0.0",
                         high_conf_variant_path = "./high_condidence_variants.tsv",
                         plot_path = NULL, profile_path = NULL){
@@ -47,12 +51,17 @@ run_batcave <- function(vcf, reference, file_type = "vcf", seq_type="wgs",
 
   tictoc::tic("Total running time")
   vars <- load_variants(vcf = vcf, reference = reference, sample_name = sample_name, file_type = file_type)
+  # Adjust allele frequencies if tumor_purity of given
+  stopifnot(tumor_fraction <= 1.0)
+  stopifnot(tumor_fraction > 0.0)
+  vars <- vars %>% dplyr::mutate(adjusted_af = freq * tumor_fraction)
+
   # compute per-site mutation probability
   # compute mu
   if (seq_type=="wes"){ N <- 3e7}
   else {N <- 3e9}
   if (is.null(mu)) {
-    Nalpha <- vars %>% dplyr::filter(pass_all & ((freq >= alpha) & (freq <= 0.25))) %>% nrow()
+    Nalpha <- vars %>% dplyr::filter(pass_all & ((adjusted_af >= alpha) & (adjusted_af <= 0.25))) %>% nrow()
     mu <- Nalpha/((1/alpha - 1/.25)*N)
   }
   message(crayon::green(glue::glue("Estimated mutation rate: ",mu)))
@@ -62,7 +71,7 @@ run_batcave <- function(vcf, reference, file_type = "vcf", seq_type="wgs",
 
   tictoc::toc()
   vars <- vars %>% dplyr::select("chrom" = "seqnames", start, end, ref, alt, context, TLOD, freq, pass_all, tlod_only, pprob_variant)
-  vars <- vars %>% dplyr::mutate(adjusted_freq = freq/(1.0 - contamination_fraction))
+
   if (!is.null(profile_path)){
     gather_context_prior_by_site(vars) %>% readr::write_tsv(profile_path)
   }
