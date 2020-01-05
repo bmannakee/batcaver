@@ -1,7 +1,7 @@
 # internal functions to compute the tumor and site specific prior probability of mutation
 
 # base function to compute all parts of the prior P(m,M|C)
-.compute_priors <- function(vr,reference,mu,min_odds, high_conf_variant_path, profile_path=NULL,plot_path=NULL){
+.compute_priors <- function(vr,reference,mu,min_odds, high_conf_variant_path=NULL, profile_path=NULL,plot_path=NULL){
   # Obtain the set of variants that have MuTect-computed odds greater than the specified threshold
   # and pass all filters.
   prior_vars <- vr %>% dplyr::filter((mutect_odds >= min_odds) & pass_all)
@@ -11,13 +11,30 @@
   # are not far from the spectrum of the higher frequency mutations
   comparison_vars <- vr %>% dplyr::filter((mutect_odds <= min_odds) & pass_all)
 
-  prior_vars %>% write_tsv(high_confidence_variant_path)
-  message(crayon::green(glue::glue("There are : ",length(prior_vars)," high confidence variants")))
+  prior_vars %>% write_tsv(high_conf_variant_path)
+  message(crayon::green(glue::glue("There are : ",nrow(prior_vars)," high confidence variants")))
   message(crayon::green(glue::glue("High confidence variant minimum allele frequency is : ",min(prior_vars$freq))))
   mutation_prior = .compute_empirical_prior(prior_vars = prior_vars, reference = reference, profile_path = profile_path, plot_path = plot_path)
-  comparison_prior = .compute_empirical_prior(prior_vars = comparison_vars, reference = reference, profile_path = NULL, plot_path = NULL)
+  #comparison_prior = .compute_empirical_prior(prior_vars = comparison_vars, reference = reference, profile_path = NULL, plot_path = NULL)
 
-  context_prior <- .compute_context_prior(prior_vars) #P(C | M) This can be zero, so need to normalize, this is where the dirichlet will come in.
+  prior_counts_fr <- .get_context_counts(prior_vars, reference) %>% dplyr::mutate(variant_type = "High-Confidence")
+  prior_counts <- prior_counts_fr %>% pull(mutation_prior)
+  comparison_counts_fr <- .get_context_counts(comparison_vars, reference) %>% dplyr::mutate(variant_type = "Low-Confidence")
+  comparison_counts <- comparison_counts_fr %>% pull(mutation_prior)
+  counts_fr <- dplyr::bind_rows(prior_counts_fr,comparison_counts_fr)
+  message(crayon::green(glue::glue("There are : ",nrow(comparison_vars)," low confidence passing variants")))
+  #print(prior_counts)
+  #print(comparison_counts)
+  p_val <- .test_priors(prior_counts, comparison_counts)
+  if (p_val < .05){
+    message(crayon::red(glue::glue("Reject the null hypothesis that low frequency mutations have the same mutation profile as those used for computing the prior: p = ",p_val)))
+    message(crayon::red("writing mutation context counts to file: ./mutation_context_counts.tsv"))
+    counts_fr %>% write_tsv("./mutation_context_counts.tsv")
+  }
+  else{
+    message(crayon::green(glue::glue("Fail to reject the null hypothesis that low frequency mutations have the same mutation profile as those used for computing the prior: p = ",p_val)))
+  }
+    context_prior <- .compute_context_prior(prior_vars) #P(C | M) This can be zero, so need to normalize, this is where the dirichlet will come in.
   rm(prior_vars)
   gc()
 
@@ -77,6 +94,7 @@
                                           calt=paste0(stringr::str_sub(ctxt,5L,5L))) %>%
     dplyr::select(context,cref, calt, "mutation_prior" = "TUMOR") %>%
     dplyr::mutate(mutation_prior = mutation_prior/sum(mutation_prior))
+
   if (!is.null(profile_path)){
     mut_prior %>% readr::write_tsv(profile_path)
   }
@@ -91,9 +109,8 @@
     group_by(context,cref) %>%
     mutate(mutation_prior=mutation_prior/sum(mutation_prior)) %>%
     ungroup()
-  if (!is.null(prior_values_path)){
-    mut_prior %>% readr::write_tsv(prior_values_path)
-  }
+
+
   mut_prior
 }
 
@@ -187,19 +204,81 @@ gather_context_prior_by_site <- function(fr){
   ppt
 }
 
-get_signature <- function(...){
-  dots <- list(...)
-  dots
-  fr <- suppressMessages(read_tsv('./data/signatures_probabilities.txt') %>% dplyr::select(-contains("X")))
 
-  names(fr) %<>% stringr::str_replace_all("\\s","_") %>% tolower
-  props <- fr %>% dplyr::select(paste0("signature_",dots)) %>%
-    dplyr::mutate_(row_total = ~Reduce(`+`,.)) %>%
-    dplyr::mutate(row_prop = row_total/sum(row_total)) %>% pull(row_prop)
-  out <- tibble(context = fr$somatic_mutation_type,prop = props)
-  out
+.get_context_counts <- function(vars,reference){
+  fr <- vars %>% dplyr::select("Sample"="sampleNames","chr"="seqnames","pos"="start",ref,alt)
+  # Workaround to get mut.to.sigs.input to work when using "BSgenome.Hsapiens.1000genomes.hs37d5"
+  # It converts everything to work with UCSC.hg19 coordinates, and while this works with NCBI.GRCh38, it fails with 1000genomes.hs37d5
+  # This solution allows deconstructSigs to use its default hg19 reference when the reference is 1000genomes.hs37d5
+  if (reference@pkgname == "BSgenome.Hsapiens.1000genomes.hs37d5") {
+    ds_input <- deconstructSigs::mut.to.sigs.input(as.data.frame(fr),bsg = NULL)
+  } else {
+    ds_input <- deconstructSigs::mut.to.sigs.input(as.data.frame(fr),bsg = reference)
+  }
+
+  rm(fr) # Clean up memory
+  gc()
+  ds_input <- ds_input %>% t() %>% as_tibble(rownames = "ctxt")
+  ds_input <- ds_input %>% mutate(TUMOR = TUMOR + 1) # This is generatating the dirichlet distribution with concentration parameter 1.
+
+  mut_prior <- ds_input %>% dplyr::mutate(context=paste0(stringr::str_sub(ctxt,1L,1L),'.',stringr::str_sub(ctxt,-1L,-1L)),
+                                          cref=paste0(stringr::str_sub(ctxt,3L,3L)),
+                                          calt=paste0(stringr::str_sub(ctxt,5L,5L))) %>%
+    dplyr::select(context,cref, calt, "mutation_prior" = "TUMOR")
+  mut_prior %>% dplyr::select(context,cref,calt,mutation_prior)
 }
 
-test_priors <- function(spectrum1, spectrum2){
 
+.test_priors <- function(counts1, counts2){
+  D <- .compute_statistic(counts1, counts2)
+  D_sd <- .compute_sd_statistic(counts1, counts2)
+  D_z <- D/D_sd # has N(0,1) distribution asymptotically
+  # return the 2-sided p-value
+  2*pnorm(-abs(D_z))
 }
+
+.compute_statistic <- function(counts1,counts2){
+  # equation 6 from Plunkett et al.
+  # Two-sample test for sparse high dimensional Multinomial Distributions
+  N1 <- length(counts1)
+  N2 <- length(counts2)
+  N1_squared <- N1**2
+  N2_squared <- N2**2
+  P1 <- counts1/N1
+  P2 <- counts2/N2
+  P1_over_squared <- counts1/N1_squared
+  P2_over_squared <- counts2/N2_squared
+  part1 <- (P1 - P2)**2
+  #print(part1)
+  inside <- part1 - P1_over_squared - P2_over_squared
+  #print(inside)
+  D <- sum(inside)
+  D
+}
+
+.compute_sd_statistic <- function(counts1,counts2){
+  # Equation 9
+  N1 <- length(counts1)
+  N2 <- length(counts2)
+  N1_squared <- N1**2
+  N2_squared <- N2**2
+  P1 <- counts1/N1
+  P2 <- counts2/N2
+  P1_squared <- P1**2
+  P2_squared <- P2**2
+  inside1_1 <- P1_squared - (P1/N1)
+  inside1_2 <- P1_squared - (P2/N2)
+  inside1 <- inside1_1 + inside1_2
+  #print(inside1)
+  part1 <- sum(inside1)
+  #print(part1)
+  part2_constant <- 4/(N1*N2)
+  inside2 <- P1*P2
+  #print(inside2)
+  part2 <- part2_constant*sum(inside2)
+  D_var <- part1 + part2
+  D_sd <- sqrt(D_var)
+  D_sd
+}
+
+

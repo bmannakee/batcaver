@@ -42,7 +42,6 @@
 run_batcave <- function(vcf, reference, file_type = "vcf", seq_type="wgs",
                         sample_name='TUMOR', tumor_fraction = 1.0,
                         min_vaf = 0.05, min_odds = 10.0,
-                        contamination_fraction = "0.0",
                         high_conf_variant_path = "./high_condidence_variants.tsv",
                         plot_path = NULL, profile_path = NULL){
   if (!file.exists(vcf)){
@@ -54,7 +53,7 @@ run_batcave <- function(vcf, reference, file_type = "vcf", seq_type="wgs",
   # Adjust allele frequencies if tumor_purity of given
   stopifnot(tumor_fraction <= 1.0)
   stopifnot(tumor_fraction > 0.0)
-  vars <- vars %>% dplyr::mutate(adjusted_af = freq * tumor_fraction)
+  vars <- vars %>% dplyr::mutate(adjusted_af = freq / tumor_fraction)
 
   # compute per-site mutation probability
   # compute mu
@@ -63,20 +62,23 @@ run_batcave <- function(vcf, reference, file_type = "vcf", seq_type="wgs",
   else
   {N <- 3e9}
 
-  Nalpha <- vars %>% dplyr::filter(pass_all & ((adjusted_af >= alpha) & (adjusted_af <= 0.25))) %>% nrow()
-  mu <- Nalpha/((1/alpha - 1/.25)*N)
+  Nalpha <- vars %>% dplyr::filter(pass_all & ((adjusted_af >= min_vaf) & (adjusted_af <= 0.25))) %>% nrow()
+  mu <- Nalpha/((1/min_vaf - 1/.25)*N)
 
   message(crayon::green(glue::glue("Estimated mutation rate: ",mu)))
 
-  vars <- .compute_priors(vars,reference = reference, mu = mu, min_odds = min_odds,
-                          plot_path = plot_path)
+  vars <- .compute_priors(vars,reference = reference,
+                          mu = mu, min_odds = min_odds,
+                          plot_path = plot_path,
+                          high_conf_variant_path = high_conf_variant_path)
 
-  tictoc::toc()
+
   vars <- vars %>% dplyr::select("chrom" = "seqnames", start, end, ref, alt, context, TLOD, freq, adjusted_af, pass_all, tlod_only, pprob_variant)
+  tictoc::toc()
+  return(vars)
+  #if (!is.null(profile_path)){
+    # #TODO: CREF is not here, leads to bug
+    #gather_context_prior_by_site(vars) %>% readr::write_tsv(profile_path)
+  #}
 
-  if (!is.null(profile_path)){
-    gather_context_prior_by_site(vars) %>% readr::write_tsv(profile_path)
-  }
-
-  vars
 }
